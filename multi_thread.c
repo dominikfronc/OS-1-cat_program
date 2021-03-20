@@ -13,12 +13,11 @@ int output_fd = 1;
 
 bool finished_reading = false;
 bool full = false;
-bool empty = true;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t not_empty = PTHREAD_COND_INITIALIZER;
 pthread_cond_t not_full = PTHREAD_COND_INITIALIZER;
 
-void *citacie_vlakno(){
+void *read_thread(){
     while(1){
         pthread_mutex_lock(&mutex);
 
@@ -26,48 +25,45 @@ void *citacie_vlakno(){
             pthread_cond_wait(&not_full, &mutex);
 
         size_read = read(input_fd,buffer,buff_const);
-        if(size_read > 0){
-            empty = false;
+        if(size_read > 0)
             full = true;
-        }
-            
         
         else
             finished_reading = true;
 
-        pthread_cond_signal(&not_empty);
         pthread_mutex_unlock(&mutex);
+        pthread_cond_signal(&not_empty);
+        
     }
 }
 
-void *zapisovacie_vlakno(){
+void *write_thread(){
     while(1){
         pthread_mutex_lock(&mutex);
 
         if(finished_reading)
             pthread_exit(NULL);
 
-        while(empty)
+        while(!full)
             pthread_cond_wait(&not_empty, &mutex);
     
         size_write = write(output_fd, buffer, size_read);
         
-        if(size_write > 0){
+        if(size_write > 0)
             full = false;
-            empty = true;
-        }
-            
-
-        pthread_cond_signal(&not_full);
+        
         pthread_mutex_unlock(&mutex);
+        pthread_cond_signal(&not_full);
+
     }
 }
 
 int main() {
     
     pthread_t t1, t2;
-    pthread_create(&t1,NULL,citacie_vlakno,NULL);
-    pthread_create(&t2,NULL,zapisovacie_vlakno,NULL);
+    pthread_create(&t1,NULL,read_thread,NULL);
+    sleep(1);
+    pthread_create(&t2,NULL,write_thread,NULL);
     
     pthread_join(t2, NULL);
 
